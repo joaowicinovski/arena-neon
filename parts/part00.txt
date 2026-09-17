@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <script src="https://www.youtube.com/game_api/v1"></script>
+  <title>Arena Neon - Sobrevivência</title>
+  <style>
+    :root{
+      --bg:#050814;
+      --panel:rgba(10,16,34,.82);
+      --line:rgba(113,206,255,.32);
+      --text:#edf7ff;
+      --muted:#9fb2c5;
+      --cyan:#58e7ff;
+      --red:#ff5573;
+      --green:#70ff9d;
+      --gold:#ffe06a;
+    }
+    *{box-sizing:border-box;user-select:none}
+    html,body{margin:0;min-height:100%;background:radial-gradient(circle at 45% 15%,#1a3566 0%,#081023 45%,#02040a 100%);font-family:Arial,Helvetica,sans-serif;color:var(--text)}
+    body{overflow:auto}
+    button,select,input{font-family:inherit}
+    #wrap{min-height:100vh;padding:14px;display:grid;place-items:center}
+    #layout{width:min(1500px,100%);display:grid;grid-template-columns:minmax(560px,1fr) 360px;gap:14px;align-items:start}
+    #gameShell{position:relative;width:100%;aspect-ratio:16/9;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:#040713;box-shadow:0 26px 80px rgba(0,0,0,.55),inset 0 0 70px rgba(88,231,255,.05)}
+    canvas{width:100%;height:100%;display:block;cursor:crosshair;background:transparent}
+    #sidePanel{display:grid;gap:12px;align-content:start;max-height:calc(100vh - 28px);overflow:auto;padding-right:2px}
+    .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:0 10px 32px rgba(0,0,0,.28);backdrop-filter:blur(8px)}
+    .box h3{margin:0 0 9px;font-size:15px;letter-spacing:.02em}
+    .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;font-size:14px}
+    .stats span{display:block;color:var(--muted);font-size:12px;margin-bottom:2px}
+    .stats b{font-size:18px;color:var(--text)}
+    .infoLine{display:flex;justify-content:space-between;gap:8px;margin-top:8px;color:var(--muted);font-size:13px;line-height:1.35}
+    .infoLine b{color:var(--text)}
+    .barWrap{height:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:999px;overflow:hidden;position:relative;margin-top:8px}
+    .bar{height:100%;width:0%;border-radius:999px;transition:width .12s linear}
+    #lifeBar{background:linear-gradient(90deg,#ff4d6e,#ffae66)}
+    #xpBar{background:linear-gradient(90deg,#58e7ff,#9076ff)}
+    .barText{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:900;text-shadow:0 1px 3px rgba(0,0,0,.9)}
+    .sideButtons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+    button{border:0;border-radius:12px;padding:11px 14px;font-weight:900;cursor:pointer;background:linear-gradient(180deg,#68eaff,#2b95ff);color:#04101e;box-shadow:0 12px 28px rgba(43,149,255,.26);transition:transform .12s ease,filter .12s ease}
+    button:hover{transform:translateY(-1px);filter:brightness(1.07)}
+    button.secondary{background:rgba(255,255,255,.08);color:var(--text);border:1px solid rgba(255,255,255,.16);box-shadow:none}
+    #upgradesList{display:flex;flex-wrap:wrap;gap:6px;max-height:158px;overflow:auto}
+    .chip{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(113,206,255,.27);background:rgba(255,255,255,.075);border-radius:999px;padding:5px 8px;font-size:12px;font-weight:800}
+    .chip .count{color:var(--gold)}
+    .empty{color:var(--muted);font-size:12px;line-height:1.4}
+    .controls{font-size:13px;line-height:1.55;color:var(--muted)}
+    .controls b{color:var(--text)}
+    #menuOverlay,#upgradeOverlay{position:absolute;inset:0;display:grid;place-items:center;padding:22px;background:radial-gradient(circle at center,rgba(7,13,30,.55),rgba(1,3,9,.90));z-index:5}
+    #upgradeOverlay{display:none;z-index:6;background:radial-gradient(circle at center,rgba(7,13,30,.38),rgba(1,3,9,.82));backdrop-filter:blur(2px)}
+    .card{width:min(820px,96%);background:rgba(8,14,30,.92);border:1px solid rgba(113,206,255,.38);border-radius:22px;padding:24px;text-align:center;box-shadow:0 26px 80px rgba(0,0,0,.60);backdrop-filter:blur(10px)}
+    h1{font-size:clamp(34px,6vw,62px);margin:0 0 8px;letter-spacing:.08em;text-transform:uppercase;text-shadow:0 0 24px rgba(88,231,255,.65)}
+    h2{margin:0 0 8px;font-size:28px}
+    p{margin:8px 0;color:var(--muted);line-height:1.55}
+    .buttons{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:18px}
+    .settingsGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:left;margin-top:14px}
+    .field{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:10px}
+    .field label{display:block;color:var(--muted);font-size:12px;font-weight:900;margin-bottom:6px}
+    select{width:100%;border:1px solid rgba(113,206,255,.30);border-radius:10px;background:rgba(4,8,18,.96);color:var(--text);padding:9px;font-weight:900;outline:none}
+    .checkField{display:flex;align-items:center;gap:10px;grid-column:1/-1;color:var(--text);font-weight:900}
+    .checkField input{width:19px;height:19px;accent-color:#58e7ff;flex:0 0 auto}
+    .checkField small{display:block;margin-top:3px;color:var(--muted);font-weight:500;line-height:1.35}
+    .upgradeGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:10px;margin-top:13px}
+    .upgrade{min-height:130px;border:1px solid rgba(113,206,255,.32);border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.085),rgba(255,255,255,.035));text-align:left;padding:14px;cursor:pointer;transition:transform .12s ease,border-color .12s ease,background .12s ease,opacity .12s ease}
+    .upgrade:hover{transform:translateY(-2px);border-color:rgba(88,231,255,.88);background:rgba(88,231,255,.12)}
+    .upgrade.selected{border-color:rgba(112,255,157,.9);background:rgba(112,255,157,.14);opacity:.78;cursor:default}
+    .upgrade .icon{font-size:24px;margin-bottom:6px}
+    .upgrade b{display:block;font-size:15px;margin-bottom:4px}
+    .upgrade small{display:block;color:var(--muted);line-height:1.35;font-size:12px}
+    #toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:4;background:rgba(8,14,30,.88);border:1px solid rgba(113,206,255,.35);border-radius:12px;padding:9px 14px;font-weight:900;color:white;opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease;box-shadow:0 10px 30px rgba(0,0,0,.28)}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(5px)}
+    @media (max-width:980px){#wrap{padding:8px;place-items:start center}#layout{grid-template-columns:1fr}.settingsGrid{grid-template-columns:1fr}#sidePanel{max-height:none;overflow:visible;padding-right:0}}
+    @media (max-width:680px){#wrap{padding:0}#gameShell{width:100vw;border-radius:0;border-left:0;border-right:0}#sidePanel{padding:9px}.card{padding:18px}.upgradeGrid{grid-template-columns:1fr}}
+
+
+    /* YouTube Playables: responsive viewport and touch controls */
+    html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none;touch-action:none}
+    #wrap{width:100%;height:100vh;height:100dvh;min-height:0;padding:10px;display:block}
+    #layout{width:100%;height:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,330px);gap:10px;align-items:stretch}
+    #gameShell{width:100%;height:100%;aspect-ratio:auto;min-width:0;min-height:0}
+    #sidePanel{max-height:100%;min-height:0;overflow:auto}
+    #touchControls{position:absolute;inset:0;z-index:3;display:none;pointer-events:none}
+    .touchStick{position:absolute;bottom:max(22px,env(safe-area-inset-bottom));width:112px;height:112px;border-radius:50%;border:2px solid rgba(255,255,255,.22);background:rgba(5,8,20,.22);box-shadow:inset 0 0 30px rgba(88,231,255,.08);backdrop-filter:blur(2px)}
+    .touchStick.move{left:max(18px,env(safe-area-inset-left))}
+    .touchStick.aim{right:max(18px,env(safe-area-inset-right))}
+    .touchKnob{position:absolute;left:50%;top:50%;width:48px;height:48px;transform:translate(-50%,-50%);border-radius:50%;background:rgba(88,231,255,.25);border:2px solid rgba(88,231,255,.66);box-shadow:0 0 20px rgba(88,231,255,.18)}
+    .touchStick span{position:absolute;left:50%;top:-22px;transform:translateX(-50%);white-space:nowrap;color:rgba(237,247,255,.78);font-size:11px;font-weight:900;text-shadow:0 2px 6px #000}
+    #touchPauseBtn{position:absolute;left:50%;bottom:max(22px,env(safe-area-inset-bottom));transform:translateX(-50%);min-width:92px;min-height:48px;padding:8px 14px;pointer-events:auto;background:rgba(8,14,30,.72);color:var(--text);border:1px solid rgba(255,255,255,.22);box-shadow:none}
+    @media (max-width:900px), (pointer:coarse){
+      #wrap{padding:0}
+      #layout{display:block;width:100%;height:100%}
+      #gameShell{width:100%;height:100%;border-radius:0;border:0}
+      #sidePanel{display:none}
+      #touchControls{display:block}
+      .card{max-height:92vh;overflow:auto;padding:18px}
+      .settingsGrid{grid-template-columns:1fr}
+      .upgradeGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+    @media (max-width:520px){
+      .touchStick{width:96px;height:96px}
+      .touchKnob{width:42px;height:42px}
+      .upgradeGrid{grid-template-columns:1fr 1fr;gap:7px}
+      .upgrade{min-height:108px;padding:10px}
+      h1{font-size:clamp(28px,12vw,48px)}
+      h2{font-size:23px}
+    }
+
+  </style>
+</head>
+<body>
+<div id="wrap">
+  <div id="layout">
+    <div id="gameShell">
+      <canvas id="game"></canvas>
+      <div id="toast"></div>
+
+      <div id="touchControls" aria-hidden="true">
+        <div class="touchStick move" id="moveStick"><span id="moveTouchLabel">MOVER</span><div class="touchKnob" id="moveKnob"></div></div>
