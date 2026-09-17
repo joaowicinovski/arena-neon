@@ -1,0 +1,120 @@
+        for(const e of game.enemies){
+          if(e.hp>0 && distance(b.x,b.y,e.x,e.y) < b.r+e.r){
+            e.hp -= b.damage;
+            e.hitFlash = .10;
+            b.pierce--;
+            particles(b.x,b.y,b.color,4,.45);
+            if(b.pierce < 0){b.life=0;break;}
+          }
+        }
+      } else if(distance(b.x,b.y,p.x,p.y) < b.r+p.r && p.invuln<=0 && game.shieldUntil<=game.time){
+        p.hp -= b.damage*(1-p.armor);
+        p.invuln = .45;
+        b.life = 0;
+        shake = Math.max(shake,7);
+        particles(p.x,p.y,'#ff5573',10,.8);
+      }
+    }
+    game.bullets = game.bullets.filter(b => b.life>0 && b.x>-70 && b.x<W+70 && b.y>-70 && b.y<H+70);
+
+    for(const e of game.enemies){
+      e.hitFlash = Math.max(0,e.hitFlash-dt);
+      const a = angleTo(e.x,e.y,p.x,p.y);
+      let desired = e.speed;
+      if(e.kind === 'sniper'){
+        const d = distance(e.x,e.y,p.x,p.y);
+        if(d < 300) desired *= -0.65;
+        if(d > 460) desired *= .9;
+        e.shootTimer -= dt;
+        if(e.shootTimer <= 0 && d < 650){
+          shootFrom(e.x,e.y,a,'enemy',11+game.wave*1.4,290+game.wave*6,0,'#5ba7ff');
+          e.shootTimer = random(1.5,2.4);
+        }
+      }
+      e.vx += Math.cos(a)*desired*dt*3.2;
+      e.vy += Math.sin(a)*desired*dt*3.2;
+      const es = Math.hypot(e.vx,e.vy);
+      const max = Math.abs(e.speed);
+      if(es > max){e.vx=e.vx/es*max;e.vy=e.vy/es*max;}
+      e.x += e.vx*dt;
+      e.y += e.vy*dt;
+      if(distance(e.x,e.y,p.x,p.y) < e.r+p.r){
+        if(p.invuln<=0 && game.shieldUntil<=game.time){
+          p.hp -= e.damage*(1-p.armor);
+          p.invuln = .55;
+          shake = Math.max(shake,10);
+          particles(p.x,p.y,e.color,14,1);
+        } else if(game.shieldUntil>game.time){
+          e.hp -= 25;
+          e.vx *= -1.8;
+          e.vy *= -1.8;
+        }
+      }
+    }
+    game.enemies = game.enemies.filter(e => {
+      if(e.hp <= 0){killEnemy(e); return false;}
+      return true;
+    });
+
+    for(const h of game.hazards){
+      h.life -= dt;
+      h.pulse += dt;
+      if(distance(h.x,h.y,p.x,p.y) < h.r+p.r && p.invuln<=0 && game.shieldUntil<=game.time){
+        p.hp -= 9*(1-p.armor);
+        p.invuln = .3;
+        shake = Math.max(shake,5);
+      }
+    }
+    game.hazards = game.hazards.filter(h => h.life>0);
+
+    for(const item of game.pickups){
+      item.life -= dt;
+      const range = p.pickupRange + (game.magnetUntil>game.time ? 165 : 0);
+      const d = distance(item.x,item.y,p.x,p.y);
+      if(d < range){
+        const a = angleTo(item.x,item.y,p.x,p.y);
+        const pull = (1-d/range)*850;
+        item.vx += Math.cos(a)*pull*dt;
+        item.vy += Math.sin(a)*pull*dt;
+      }
+      item.vx *= Math.pow(.92,dt*60);
+      item.vy *= Math.pow(.92,dt*60);
+      item.x += item.vx*dt;
+      item.y += item.vy*dt;
+      if(d < item.r+p.r){
+        item.life = 0;
+        if(item.type==='crystal'){gainXP(item.value); game.score += 2;}
+        if(item.type==='heal'){p.hp=Math.min(p.maxHp,p.hp+item.value); toast(tr('heal'));}
+        if(item.type==='rapid'){game.rapidUntil=game.time+8; toast(tr('rapid'));}
+        if(item.type==='shield'){game.shieldUntil=game.time+8; toast(tr('shield'));}
+        if(item.type==='magnet'){game.magnetUntil=game.time+9; toast(tr('magnet'));}
+        if(item.type==='double'){game.doubleUntil=game.time+12; toast(tr('doubleXp'));}
+        if(item.type==='bomb'){explodeBomb(item.x,item.y); toast(tr('bomb'));}
+        particles(item.x,item.y,item.color,14,.8);
+      }
+    }
+    game.pickups = game.pickups.filter(item => item.life>0);
+
+    for(const q of game.particles){q.x+=q.vx*dt;q.y+=q.vy*dt;q.vx*=Math.pow(.88,dt*60);q.vy*=Math.pow(.88,dt*60);q.life-=dt;}
+    game.particles = game.particles.filter(q => q.life>0);
+    for(const t of game.texts){t.y+=t.vy*dt;t.life-=dt;}
+    game.texts = game.texts.filter(t => t.life>0);
+
+    if(p.hp <= 0){p.hp = 0; showGameOver();}
+    updateHud();
+  }
+
+  function updateHud(){
+    const p = game.player || {hp:100,maxHp:100};
+    scoreText.textContent = Math.floor(game.score);
+    bestText.textContent = Math.floor(game.best);
+    waveText.textContent = game.wave;
+    levelText.textContent = game.level;
+    enemyText.textContent = game.enemies.length;
+    lifeBar.style.width = clamp((p.hp/p.maxHp)*100,0,100)+'%';
+    xpBar.style.width = clamp((game.xp/game.xpNeed)*100,0,100)+'%';
+    lifeText.textContent = `${tr('health')} ${Math.ceil(p.hp)} / ${Math.ceil(p.maxHp)}`;
+    xpText.textContent = `XP ${Math.floor(game.xp)} / ${game.xpNeed}`;
+  }
+
+  function drawBackground(){
