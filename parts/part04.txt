@@ -1,0 +1,120 @@
+          <label for="optionCount">${tr('optionsLabel')}</label>
+          <select id="optionCount">
+            <option value="3">3 ${tr('options')}</option>
+            <option value="4">4 ${tr('options')}</option>
+            <option value="5">5 ${tr('options')}</option>
+            <option value="6">6 ${tr('options')}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="pickCount">${tr('pickLabel')}</label>
+          <select id="pickCount">
+            <option value="1">1 ${tr('power')}</option>
+            <option value="2">2 ${tr('powers')}</option>
+            <option value="3">3 ${tr('powers')}</option>
+          </select>
+        </div>
+        <label class="field checkField">
+          <input type="checkbox" id="autoFire">
+          <span>${tr('autoFire')}<small>${tr('autoFireHelp')}</small></span>
+        </label>
+      </div>
+      <div class="buttons">
+        <button id="startGameBtn">${tr('start')}</button>
+        <button id="howBtn" class="secondary">${tr('how')}</button>
+      </div>`;
+    document.getElementById('optionCount').value = String(config.optionCount);
+    document.getElementById('pickCount').value = String(config.pickCount);
+    document.getElementById('autoFire').checked = !!config.autoFire;
+    document.getElementById('startGameBtn').addEventListener('click', resetGame);
+    document.getElementById('howBtn').addEventListener('click', showHow);
+  }
+
+  function showHow(){
+    menuScreen = 'how';
+    menuOverlay.style.display = 'grid';
+    menuCard.innerHTML = `
+      <h2>${tr('howTitle')}</h2>
+      <p>${tr('how1')}</p>
+      <p>${tr('how2')}</p>
+      <p>${tr('how3')}</p>
+      <div class="buttons">
+        <button id="backMenuBtn" class="secondary">${tr('back')}</button>
+        <button id="startGameBtn2">${tr('start')}</button>
+      </div>`;
+    document.getElementById('backMenuBtn').addEventListener('click', showMenu);
+    document.getElementById('startGameBtn2').addEventListener('click', resetGame);
+  }
+
+  function showPause(){
+    state = 'pause';
+    menuScreen = 'pause';
+    menuOverlay.style.display = 'grid';
+    menuCard.innerHTML = `
+      <h2>${tr('paused')}</h2>
+      <p>${tr('score')}: <b>${Math.floor(game.score)}</b> • ${tr('wave')}: <b>${game.wave}</b> • ${tr('level')}: <b>${game.level}</b></p>
+      <div class="buttons">
+        <button id="resumeBtn">${tr('continue')}</button>
+        <button id="restartPauseBtn" class="secondary">${tr('restart')}</button>
+        <button id="menuPauseBtn" class="secondary">${tr('menu')}</button>
+      </div>`;
+    document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+    document.getElementById('restartPauseBtn').addEventListener('click', resetGame);
+    document.getElementById('menuPauseBtn').addEventListener('click', showMenu);
+    queueSave();
+  }
+
+  function showGameOver(){
+    state = 'gameover';
+    menuScreen = 'gameover';
+    menuOverlay.style.display = 'grid';
+    menuCard.innerHTML = `
+      <h2>${tr('gameOver')}</h2>
+      <p>${tr('yourScore')} <b>${Math.floor(game.score)}</b><br>${tr('best')}: <b>${Math.floor(game.best)}</b><br>${tr('reached',{wave:game.wave,level:game.level})}</p>
+      <div class="buttons">
+        <button id="againBtn">${tr('again')}</button>
+        <button id="menuGameOverBtn" class="secondary">${tr('menu')}</button>
+      </div>`;
+    document.getElementById('againBtn').addEventListener('click', resetGame);
+    document.getElementById('menuGameOverBtn').addEventListener('click', showMenu);
+    void saveProgress();
+    void sendBestScore(true);
+  }
+
+  function resumeGame(){
+    if(state === 'pause'){
+      state = 'playing';
+      menuOverlay.style.display = 'none';
+    }
+  }
+
+  function togglePause(){
+    if(state === 'playing') showPause();
+    else if(state === 'pause') resumeGame();
+  }
+
+  function toast(message){
+    toastEl.textContent = message;
+    toastEl.classList.add('show');
+    toastTimer = 1.4;
+  }
+
+  function floatingText(x,y,text,color='white'){
+    game.texts.push({x,y,text,color,life:.85,vy:-38});
+  }
+
+  function particles(x,y,color,count=12,force=1){
+    for(let i=0;i<count;i++){
+      const a = Math.random()*Math.PI*2;
+      const s = random(45,220)*force;
+      game.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:random(1.4,4.4),life:random(.35,.85),color});
+    }
+  }
+
+  function spawnPickup(type,x,y){
+    const data = {
+      crystal:{r:8,color:'#58e7ff',value:18,life:99},
+      heal:{r:11,color:'#70ff9d',value:28,life:13},
+      rapid:{r:11,color:'#ffe06a',value:0,life:12},
+      bomb:{r:12,color:'#ff5573',value:0,life:12},
+      shield:{r:12,color:'#9b7cff',value:0,life:12},
