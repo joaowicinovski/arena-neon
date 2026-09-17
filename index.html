@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Arena Neon</title>
+  <style>
+    html,body{margin:0;width:100%;height:100%;background:#02040a;color:#edf7ff;font-family:Arial,Helvetica,sans-serif;display:grid;place-items:center}
+    #loading{text-align:center;padding:24px}
+    #loading h1{margin:0 0 8px;font-size:34px;letter-spacing:.08em;text-transform:uppercase}
+    #loading p{margin:0;color:#9fb2c5}
+  </style>
+</head>
+<body>
+  <div id="loading"><h1>Arena Neon</h1><p>Carregando jogo…</p></div>
+  <script>
+    (async()=>{
+      try{
+        const paths=Array.from({length:10},(_,i)=>`parts/part${String(i).padStart(2,'0')}.txt`);
+        const responses=await Promise.all(paths.map(p=>fetch(p,{cache:'no-store'})));
+        if(responses.some(r=>!r.ok)) throw new Error('Falha ao carregar arquivos do jogo');
+        const html=(await Promise.all(responses.map(r=>r.text()))).join('');
+        document.open();
+        document.write(html);
+        document.close();
+      }catch(err){
+        document.getElementById('loading').innerHTML='<h1>Arena Neon</h1><p>Não foi possível carregar o jogo. Atualize a página.</p>';
+        console.error(err);
+      }
+    })();
+  </script>
+</body>
+</html>
