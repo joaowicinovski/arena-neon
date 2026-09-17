@@ -1,0 +1,120 @@
+
+  const keys = new Set();
+  const mouse = {x:W/2, y:H/2, down:false};
+  const touch = {moveId:null,aimId:null,moveStartX:0,moveStartY:0,moveX:0,moveY:0,aimStartX:0,aimStartY:0,aimAngle:null};
+  let state = 'menu';
+  let menuScreen = 'main';
+  let lastTime = performance.now();
+  let spawnTimer = 0;
+  let waveTimer = 0;
+  let toastTimer = 0;
+  let shake = 0;
+  let stars = [];
+  let rafId = 0;
+  let saveQueued = false;
+
+  const config = {
+    optionCount: 3,
+    pickCount: 1,
+    autoFire: false
+  };
+
+  const upgradePool = [
+    {id:'damage', icon:'💥', nameKey:'up_damage', descKey:'up_damage_d', apply:()=>{game.player.damage*=1.25;}},
+    {id:'fire', icon:'⚡', nameKey:'up_fire', descKey:'up_fire_d', apply:()=>{game.player.fireDelay=Math.max(75, game.player.fireDelay*.82);}},
+    {id:'speed', icon:'🏃', nameKey:'up_speed', descKey:'up_speed_d', apply:()=>{game.player.maxSpeed*=1.12;}},
+    {id:'life', icon:'❤️', nameKey:'up_life', descKey:'up_life_d', apply:()=>{const p=game.player;p.maxHp+=25;p.hp=Math.min(p.maxHp,p.hp+25);floatingText(p.x,p.y,tr('maxLife'),'#70ff9d');}},
+    {id:'spread', icon:'🔱', nameKey:'up_spread', descKey:'up_spread_d', apply:()=>{game.player.spread++;}},
+    {id:'pierce', icon:'🎯', nameKey:'up_pierce', descKey:'up_pierce_d', apply:()=>{game.player.pierce++;}},
+    {id:'crit', icon:'✦', nameKey:'up_crit', descKey:'up_crit_d', apply:()=>{game.player.crit=Math.min(.6,game.player.crit+.10);}},
+    {id:'regen', icon:'✚', nameKey:'up_regen', descKey:'up_regen_d', apply:()=>{game.player.regen+=.75;}},
+    {id:'bullet', icon:'➤', nameKey:'up_bullet', descKey:'up_bullet_d', apply:()=>{game.player.bulletSpeed*=1.15;}},
+    {id:'magnet', icon:'🧲', nameKey:'up_magnet', descKey:'up_magnet_d', apply:()=>{game.player.pickupRange+=45;}},
+    {id:'drone', icon:'🤖', nameKey:'up_drone', descKey:'up_drone_d', apply:()=>{addDrone();}},
+    {id:'armor', icon:'🛡️', nameKey:'up_armor', descKey:'up_armor_d', apply:()=>{game.player.armor=Math.min(.65, game.player.armor+.10);}}
+  ];
+
+  const game = {
+    player:null,
+    bullets:[], enemies:[], pickups:[], particles:[], texts:[], drones:[], hazards:[],
+    score:0, best:0,
+    wave:1, level:1, xp:0, xpNeed:80, time:0,
+    rapidUntil:0, shieldUntil:0, magnetUntil:0, doubleUntil:0,
+    upgrades:{},
+    paused:false
+  };
+
+
+  function applyStaticTranslations(){
+    document.documentElement.lang = language === 'pt' ? 'pt-BR' : 'en';
+    document.title = language === 'pt' ? 'Arena Neon - Sobrevivência' : 'Arena Neon - Survival';
+    const set = (id,key) => {const el=document.getElementById(id); if(el) el.textContent=tr(key);};
+    set('upgradeHeading','chooseUpgrades'); set('statusHeading','status'); set('scoreLabel','score'); set('bestLabel','best'); set('waveLabel','wave'); set('levelLabel','level');
+    set('shootModeLabel','shootMode'); set('enemyLabel','enemies'); set('pauseBtn','pause'); set('restartBtn','restart'); set('touchPauseBtn','pause');
+    set('lifeHeading','lifeXp'); set('upgradesHeading','upgrades'); set('controlsHeading','controls'); set('moveTouchLabel','move'); set('aimTouchLabel','aimFire');
+    const cb=document.getElementById('controlsBody'); if(cb) cb.innerHTML=tr('controlsHtml');
+    shootModeText.textContent = config.autoFire ? tr('automatic') : tr('manual');
+    updateUpgradeList(); updateHud();
+  }
+
+  function serializeProgress(){
+    return JSON.stringify({version:1,best:Math.floor(game.best),settings:{optionCount:config.optionCount,pickCount:config.pickCount,autoFire:!!config.autoFire}});
+  }
+
+  function applySavedProgress(raw){
+    if(!raw) return;
+    try{
+      const data=JSON.parse(raw);
+      if(data && Number.isFinite(Number(data.best))) game.best=Math.max(0,Number(data.best));
+      if(data && data.settings){
+        const s=data.settings;
+        config.optionCount=clamp(parseInt(s.optionCount,10)||3,1,upgradePool.length);
+        config.pickCount=clamp(parseInt(s.pickCount,10)||1,1,Math.max(1,config.optionCount));
+        config.autoFire=!!s.autoFire;
+      }
+    }catch(_){ /* Ignore incompatible/corrupt older saves. */ }
+  }
+
+  async function saveProgress(){
+    if(!platform.loaded) return false;
+    const data=serializeProgress();
+    try{
+      if(platform.inPlayables){
+        await ytgame.game.saveData(data);
+      }else{
+        localStorage.setItem('arena_neon_save',data);
+      }
+      return true;
+    }catch(_){ return false; }
+  }
+
+  function queueSave(){
+    if(saveQueued || !platform.loaded) return;
+    saveQueued=true;
+    Promise.resolve().then(async()=>{saveQueued=false;await saveProgress();});
+  }
+
+  async function sendBestScore(force=false){
+    if(!platform.inPlayables || !platform.loaded) return;
+    const score=Math.floor(game.best);
+    if(score<=platform.lastSentScore && !force) return;
+    const saved=await saveProgress();
+    if(!saved) return;
+    try{await ytgame.engagement.sendScore({value:score});platform.lastSentScore=Math.max(platform.lastSentScore,score);}catch(_){ }
+  }
+
+  function onPlatformPause(){
+    if(platform.paused) return;
+    platform.paused=true;
+    mouse.down=false;
+    clearTouchControls();
+    if(rafId){cancelAnimationFrame(rafId);rafId=0;}
+    void saveProgress();
+  }
+
+  function onPlatformResume(){
+    if(!platform.paused) return;
+    platform.paused=false;
+    lastTime=performance.now();
+    startLoop();
+  }
