@@ -1,0 +1,63 @@
+      }
+      return;
+    }
+    if(e.button===0){mouse.x=pos.x;mouse.y=pos.y;mouse.down=true;canvas.setPointerCapture?.(e.pointerId);}
+  });
+  canvas.addEventListener('pointermove', e => {
+    if(platform.paused) return;
+    const pos=canvasPos(e);
+    if(e.pointerType==='touch'){
+      if(e.pointerId===touch.moveId){
+        let dx=(pos.x-touch.moveStartX)/58,dy=(pos.y-touch.moveStartY)/58;
+        const m=Math.hypot(dx,dy);if(m>1){dx/=m;dy/=m;}
+        touch.moveX=dx;touch.moveY=dy;moveStickVisual(moveKnob,dx,dy);
+      }else if(e.pointerId===touch.aimId){
+        // Mobile aim: direct twin-stick angle. No interpolation/smoothing.
+        // A tiny thumb movement immediately becomes the ship's exact aim direction.
+        const dxRaw=pos.x-touch.aimStartX,dyRaw=pos.y-touch.aimStartY;
+        const dist=Math.hypot(dxRaw,dyRaw);
+        if(dist>2){
+          touch.aimAngle=Math.atan2(dyRaw,dxRaw);
+          const dx=dxRaw/dist,dy=dyRaw/dist;
+          moveStickVisual(aimKnob,dx,dy);
+          const p=game.player;
+          if(p){mouse.x=p.x+Math.cos(touch.aimAngle)*1000;mouse.y=p.y+Math.sin(touch.aimAngle)*1000;}
+        }
+        mouse.down=true;
+      }
+      return;
+    }
+    mouse.x=pos.x;mouse.y=pos.y;
+  }, {passive:true});
+  function releasePointer(e){
+    if(e.pointerType==='touch'){
+      if(e.pointerId===touch.moveId){touch.moveId=null;touch.moveX=0;touch.moveY=0;resetStickVisual(moveKnob);}
+      if(e.pointerId===touch.aimId){touch.aimId=null;touch.aimAngle=null;mouse.down=false;resetStickVisual(aimKnob);}
+    }else mouse.down=false;
+  }
+  canvas.addEventListener('pointerup', releasePointer);
+  canvas.addEventListener('pointercancel', releasePointer);
+
+  window.addEventListener('keydown', e => {
+    if(platform.paused) return;
+    const k = e.key.toLowerCase();
+    keys.add(k);
+    if(k === 'p') togglePause();
+    if(k === 'r' && state !== 'menu') resetGame();
+    if(k === 'escape'){
+      if(state==='pause') resumeGame();
+      else if(state==='menu' && menuScreen==='how') showMenu();
+    }
+    if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
+  });
+  window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+
+  pauseBtn.addEventListener('click', togglePause);
+  restartBtn.addEventListener('click', resetGame);
+  touchPauseBtn.addEventListener('click', togglePause);
+
+  void initPlatform();
+})();
+</script>
+</body>
+</html>
