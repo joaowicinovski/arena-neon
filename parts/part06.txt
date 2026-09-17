@@ -1,0 +1,120 @@
+              upgradeOverlay.style.display = 'none';
+              state = 'playing';
+            }
+          }, 220);
+        }
+      });
+      upgradeGrid.appendChild(el);
+    });
+  }
+
+  function gainXP(amount){
+    if(game.doubleUntil > game.time) amount *= 2;
+    game.xp += amount;
+    if(game.xp >= game.xpNeed){
+      game.xp -= game.xpNeed;
+      game.level++;
+      game.xpNeed = Math.floor(game.xpNeed*1.22 + 25);
+      queueSave();
+      makeUpgradeChoices();
+    }
+  }
+
+  function killEnemy(enemy){
+    game.score += enemy.score;
+    if(game.score > game.best){
+      game.best = game.score;
+      platform.scoreSyncDue = true;
+    }
+    gainXP(enemy.xp);
+    particles(enemy.x,enemy.y,enemy.color,18,1.05);
+    floatingText(enemy.x,enemy.y,'+'+enemy.score,enemy.color);
+    if(Math.random()<.25) spawnPickup('crystal', enemy.x, enemy.y);
+    if(Math.random()<.035) spawnPickup('heal', enemy.x, enemy.y);
+    if(Math.random()<.025) spawnPickup(['rapid','bomb','shield','magnet','double'][Math.floor(random(0,5))], enemy.x, enemy.y);
+    if(enemy.kind === 'splitter' && enemy.r > 12){
+      for(let i=0;i<2;i++) game.enemies.push({kind:'runner',x:enemy.x+random(-12,12),y:enemy.y+random(-12,12),vx:random(-80,80),vy:random(-80,80),r:10,hp:18+game.wave*3,maxHp:18+game.wave*3,speed:150+game.wave*4,color:'#70ff9d',score:8,xp:8,damage:8,hitFlash:0});
+    }
+  }
+
+  function explodeBomb(x,y){
+    shake = Math.max(shake,12);
+    particles(x,y,'#ff5573',56,1.7);
+    for(const e of game.enemies){
+      const d = distance(x,y,e.x,e.y);
+      if(d < 180){e.hp -= 135*(1-d/180); e.hitFlash = .15;}
+    }
+    game.enemies = game.enemies.filter(e => {
+      if(e.hp <= 0){killEnemy(e); return false;}
+      return true;
+    });
+  }
+
+  function update(dt, now){
+    if(state !== 'playing') return;
+    const p = game.player;
+    game.time += dt;
+    if(platform.scoreSyncDue && Math.floor(game.time*2)%4===0){platform.scoreSyncDue=false;void sendBestScore();}
+    spawnTimer -= dt;
+    waveTimer += dt;
+    shake = Math.max(0, shake-dt*20);
+    p.invuln = Math.max(0, p.invuln-dt);
+
+    if(toastTimer > 0){
+      toastTimer -= dt;
+      if(toastTimer <= 0) toastEl.classList.remove('show');
+    }
+
+    if(waveTimer >= 24){
+      waveTimer = 0;
+      game.wave++;
+      toast(tr('waveToast',{wave:game.wave}));
+      if(game.wave % 3 === 0) spawnHazard();
+      for(let i=0;i<Math.min(3+game.wave,10);i++) spawnEnemy(i%4===0?'tank':'chaser');
+    }
+
+    if(spawnTimer <= 0){
+      spawnTimer = Math.max(.16, 1.08 - game.wave*.045);
+      const roll = Math.random();
+      let kind = 'chaser';
+      if(game.wave>2 && roll<.24) kind='runner';
+      if(game.wave>4 && roll>.78) kind='splitter';
+      if(game.wave>6 && roll>.88) kind='tank';
+      if(game.wave>7 && roll>.70 && roll<.78) kind='sniper';
+      spawnEnemy(kind);
+    }
+
+    let ax=touch.moveX, ay=touch.moveY;
+    if(keys.has('w')||keys.has('arrowup')) ay--;
+    if(keys.has('s')||keys.has('arrowdown')) ay++;
+    if(keys.has('a')||keys.has('arrowleft')) ax--;
+    if(keys.has('d')||keys.has('arrowright')) ax++;
+    const mag = Math.hypot(ax,ay) || 1;
+    ax/=mag; ay/=mag;
+    p.vx += ax*p.accel*dt;
+    p.vy += ay*p.accel*dt;
+    const sp = Math.hypot(p.vx,p.vy);
+    if(sp > p.maxSpeed){p.vx=p.vx/sp*p.maxSpeed;p.vy=p.vy/sp*p.maxSpeed;}
+    p.vx *= Math.pow(p.friction,dt*60);
+    p.vy *= Math.pow(p.friction,dt*60);
+    p.x = clamp(p.x+p.vx*dt,p.r,W-p.r);
+    p.y = clamp(p.y+p.vy*dt,p.r,H-p.r);
+    if(p.regen>0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp+p.regen*dt);
+
+    if(config.autoFire || mouse.down || keys.has(' ')) playerShoot(now);
+
+    for(const d of game.drones){
+      d.angle += dt*1.35;
+      d.x = p.x + Math.cos(d.angle)*d.radius;
+      d.y = p.y + Math.sin(d.angle)*d.radius;
+      d.lastShot -= dt;
+      if(d.lastShot <= 0 && game.enemies.length){
+        let target=null, best=Infinity;
+        for(const e of game.enemies){const dd=distance(d.x,d.y,e.x,e.y);if(dd<best){best=dd;target=e;}}
+        if(target && best<430){shootFrom(d.x,d.y,angleTo(d.x,d.y,target.x,target.y),'player',p.damage*.55,p.bulletSpeed*.85,0,'#70ff9d');d.lastShot=.48;}
+      }
+    }
+
+    for(const b of game.bullets){b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;}
+    for(const b of game.bullets){
+      if(b.owner === 'player'){
