@@ -1,0 +1,120 @@
+        <button id="touchPauseBtn" type="button">Pausar</button>
+        <div class="touchStick aim" id="aimStick"><span id="aimTouchLabel">MIRAR / ATIRAR</span><div class="touchKnob" id="aimKnob"></div></div>
+      </div>
+      <div id="upgradeOverlay">
+        <div class="card">
+          <h2 id="upgradeHeading">Escolha melhorias</h2>
+          <p id="upgradeHint">A partida fica pausada até escolher.</p>
+          <div class="upgradeGrid" id="upgradeGrid"></div>
+        </div>
+      </div>
+      <div id="menuOverlay">
+        <div class="card" id="menuCard"></div>
+      </div>
+    </div>
+
+    <aside id="sidePanel">
+      <div class="box">
+        <h3 id="statusHeading">Status da partida</h3>
+        <div class="stats">
+          <div><span id="scoreLabel">Pontos</span><b id="scoreText">0</b></div>
+          <div><span id="bestLabel">Recorde</span><b id="bestText">0</b></div>
+          <div><span id="waveLabel">Onda</span><b id="waveText">1</b></div>
+          <div><span id="levelLabel">Nível</span><b id="levelText">1</b></div>
+        </div>
+        <div class="infoLine"><span id="shootModeLabel">Modo de tiro</span><b id="shootModeText">Manual</b></div>
+        <div class="infoLine"><span id="enemyLabel">Inimigos na tela</span><b id="enemyText">0</b></div>
+        <div class="sideButtons">
+          <button id="pauseBtn" class="secondary">Pausar</button>
+          <button id="restartBtn" class="secondary">Reiniciar</button>
+        </div>
+      </div>
+
+      <div class="box">
+        <h3 id="lifeHeading">Vida e experiência</h3>
+        <div class="barWrap"><div id="lifeBar" class="bar"></div><div id="lifeText" class="barText">Vida</div></div>
+        <div class="barWrap"><div id="xpBar" class="bar"></div><div id="xpText" class="barText">XP</div></div>
+      </div>
+
+      <div class="box">
+        <h3 id="upgradesHeading">Melhorias aplicadas</h3>
+        <div id="upgradesList"><span class="empty">Nenhuma melhoria ainda.</span></div>
+      </div>
+
+      <div class="box controls">
+        <h3 id="controlsHeading">Controles</h3>
+        <div id="controlsBody"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const shell = document.getElementById('gameShell');
+  const menuOverlay = document.getElementById('menuOverlay');
+  const menuCard = document.getElementById('menuCard');
+  const upgradeOverlay = document.getElementById('upgradeOverlay');
+  const upgradeGrid = document.getElementById('upgradeGrid');
+  const upgradeHint = document.getElementById('upgradeHint');
+  const toastEl = document.getElementById('toast');
+  const scoreText = document.getElementById('scoreText');
+  const bestText = document.getElementById('bestText');
+  const waveText = document.getElementById('waveText');
+  const levelText = document.getElementById('levelText');
+  const enemyText = document.getElementById('enemyText');
+  const shootModeText = document.getElementById('shootModeText');
+  const lifeBar = document.getElementById('lifeBar');
+  const xpBar = document.getElementById('xpBar');
+  const lifeText = document.getElementById('lifeText');
+  const xpText = document.getElementById('xpText');
+  const upgradesList = document.getElementById('upgradesList');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const restartBtn = document.getElementById('restartBtn');
+  const touchPauseBtn = document.getElementById('touchPauseBtn');
+  const moveKnob = document.getElementById('moveKnob');
+  const aimKnob = document.getElementById('aimKnob');
+
+  const I18N = {
+    en:{
+      chooseUpgrades:'Choose upgrades',status:'Match status',score:'Score',best:'Best',wave:'Wave',level:'Level',shootMode:'Fire mode',enemies:'Enemies on screen',manual:'Manual',automatic:'Automatic',
+      pause:'Pause',restart:'Restart',lifeXp:'Health and experience',upgrades:'Applied upgrades',none:'No upgrades yet.',controls:'Controls',
+      controlsHtml:'<b>WASD/arrows:</b> move<br><b>Mouse:</b> aim<br><b>Click or space:</b> fire in manual mode<br><b>Touch:</b> left stick moves; right stick aims and fires<br><b>Auto fire:</b> fires toward the aim automatically<br><b>P:</b> pause • <b>R:</b> restart',
+      move:'MOVE',aimFire:'AIM / FIRE',health:'Health',loading:'Loading Arena Neon…',
+      tagline:'Survive the waves, collect crystals and choose upgrades to become stronger.',objective:'Objective:',objectiveText:'survive as long as possible without being eliminated by enemies.',
+      optionsLabel:'Power options shown',pickLabel:'Powers picked each time',options:'options',power:'power',powers:'powers',autoFire:'Auto fire',autoFireHelp:'The game fires automatically. You still aim with the mouse or touch.',start:'Start',how:'How to play',
+      howTitle:'How to play',how1:'Move with <b>WASD</b> or <b>arrow keys</b>. Aim with the mouse. On touchscreens, use the left stick to move and the right stick to aim.',how2:'In manual mode, click, hold <b>space</b>, or use the right touch stick to fire. In auto mode, shots fire automatically toward your aim.',how3:'When you level up, powers appear over the game. You can choose how many options and picks appear before starting.',back:'Back',
+      paused:'Game paused',continue:'Continue',menu:'Menu',gameOver:'Game over',yourScore:'Your score:',reached:'You reached wave {wave} and level {level}.',again:'Play again',started:'Match started',waveToast:'Wave {wave}',choose:'Choose {n} {word}. Selected: {selected}/{n}.',heal:'Heal',rapid:'Rapid fire',shield:'Shield',magnet:'Magnet',doubleXp:'Double XP',bomb:'Bomb',crit:'CRIT',maxLife:'MAX HEALTH +25',
+      up_damage:'Damage +25%',up_damage_d:'Each shot deals more damage.',up_fire:'Fire rate +18%',up_fire_d:'Reduces time between shots.',up_speed:'Speed +12%',up_speed_d:'Move faster.',up_life:'Max health +25',up_life_d:'Increases maximum health and heals.',up_spread:'Triple shot',up_spread_d:'Adds side projectiles.',up_pierce:'Pierce +1',up_pierce_d:'Shots pass through more enemies.',up_crit:'Critical +10%',up_crit_d:'Higher chance of double damage.',up_regen:'Regeneration',up_regen_d:'Slowly restores health.',up_bullet:'Faster projectile',up_bullet_d:'Shots travel faster.',up_magnet:'Larger pickup range',up_magnet_d:'Pulls crystals from farther away.',up_drone:'Ally drone',up_drone_d:'Adds a drone that fires automatically.',up_armor:'Armor',up_armor_d:'Reduces incoming damage.'
+    },
+    pt:{
+      chooseUpgrades:'Escolha melhorias',status:'Status da partida',score:'Pontos',best:'Recorde',wave:'Onda',level:'Nível',shootMode:'Modo de tiro',enemies:'Inimigos na tela',manual:'Manual',automatic:'Automático',
+      pause:'Pausar',restart:'Reiniciar',lifeXp:'Vida e experiência',upgrades:'Melhorias aplicadas',none:'Nenhuma melhoria ainda.',controls:'Controles',
+      controlsHtml:'<b>WASD/setas:</b> mover<br><b>Mouse:</b> mirar<br><b>Clique ou espaço:</b> atirar no modo manual<br><b>Toque:</b> controle esquerdo move; direito mira e atira<br><b>Tiro automático:</b> dispara sozinho na direção da mira<br><b>P:</b> pausar • <b>R:</b> reiniciar',
+      move:'MOVER',aimFire:'MIRAR / ATIRAR',health:'Vida',loading:'Carregando Arena Neon…',
+      tagline:'Sobreviva às ondas, colete cristais e escolha melhorias para ficar cada vez mais forte.',objective:'Objetivo:',objectiveText:'aguentar o máximo possível sem ser eliminado pelos inimigos.',
+      optionsLabel:'Opções de poderes que aparecem',pickLabel:'Poderes escolhidos por vez',options:'opções',power:'poder',powers:'poderes',autoFire:'Tiro automático',autoFireHelp:'O jogo dispara automaticamente. A mira continua sendo feita pelo mouse ou toque.',start:'Começar',how:'Como jogar',
+      howTitle:'Como jogar',how1:'Movimente com <b>WASD</b> ou <b>setas</b>. A mira é feita com o mouse. No celular, use o controle esquerdo para mover e o direito para mirar.',how2:'No modo manual, clique, segure <b>espaço</b> ou use o controle direito para atirar. No modo automático, o jogo dispara sozinho na direção da mira.',how3:'Ao subir de nível, os poderes aparecem sobre a tela do jogo. Você pode escolher a quantidade antes de começar.',back:'Voltar',
+      paused:'Jogo pausado',continue:'Continuar',menu:'Menu',gameOver:'Fim de jogo',yourScore:'Sua pontuação:',reached:'Você chegou na onda {wave} e no nível {level}.',again:'Jogar de novo',started:'Partida iniciada',waveToast:'Onda {wave}',choose:'Escolha {n} {word}. Selecionados: {selected}/{n}.',heal:'Cura',rapid:'Tiro rápido',shield:'Escudo',magnet:'Ímã',doubleXp:'XP dobrado',bomb:'Bomba',crit:'CRIT',maxLife:'MAX VIDA +25',
+      up_damage:'Dano +25%',up_damage_d:'Cada tiro causa mais dano.',up_fire:'Cadência +18%',up_fire_d:'Reduz o intervalo entre tiros.',up_speed:'Velocidade +12%',up_speed_d:'Movimento mais rápido.',up_life:'Vida máxima +25',up_life_d:'Aumenta a barra de vida máxima e recupera vida.',up_spread:'Tiro triplo',up_spread_d:'Adiciona tiros laterais.',up_pierce:'Perfuração +1',up_pierce_d:'Os tiros atravessam mais inimigos.',up_crit:'Crítico +10%',up_crit_d:'Mais chance de dano dobrado.',up_regen:'Regeneração',up_regen_d:'Recupera vida lentamente.',up_bullet:'Projétil veloz',up_bullet_d:'Tiros mais rápidos.',up_magnet:'Coleta maior',up_magnet_d:'Puxa cristais de mais longe.',up_drone:'Drone aliado',up_drone_d:'Adiciona um drone que atira sozinho.',up_armor:'Armadura',up_armor_d:'Reduz dano recebido.'
+    }
+  };
+  let language = 'en';
+  const tr = (key, vars={}) => {
+    let s = (I18N[language] && I18N[language][key]) ?? I18N.en[key] ?? key;
+    for(const [k,v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v));
+    return s;
+  };
+
+  const platform = {
+    inPlayables: typeof ytgame !== 'undefined' && !!ytgame.IN_PLAYABLES_ENV,
+    loaded:false, paused:false, audioEnabled:true, lastSentScore:-1, scoreSyncDue:false
+  };
+
+  const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  let W = 1280;
+  let H = 720;
