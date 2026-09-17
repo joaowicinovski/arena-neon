@@ -1,0 +1,120 @@
+      magnet:{r:11,color:'#ff9df0',value:0,life:12},
+      double:{r:11,color:'#ffbf69',value:0,life:12}
+    }[type] || {r:8,color:'#58e7ff',value:12,life:15};
+    game.pickups.push({type,x,y,vx:0,vy:0,...data});
+  }
+
+  function spawnEnemy(kind){
+    const side = Math.floor(random(0,4));
+    let x,y;
+    if(side===0){x=random(-30,W+30);y=-35;}
+    else if(side===1){x=W+35;y=random(-30,H+30);}
+    else if(side===2){x=random(-30,W+30);y=H+35;}
+    else {x=-35;y=random(-30,H+30);}
+    const w = game.wave;
+    const base = {
+      chaser:{r:15,hp:34+w*5,speed:95+w*4,color:'#ff5573',score:12,xp:12,damage:15},
+      runner:{r:11,hp:21+w*3,speed:158+w*5,color:'#ffe06a',score:16,xp:14,damage:10},
+      tank:{r:24,hp:112+w*13,speed:58+w*2,color:'#b072ff',score:42,xp:32,damage:28},
+      splitter:{r:17,hp:48+w*6,speed:86+w*4,color:'#70ff9d',score:25,xp:18,damage:16},
+      sniper:{r:14,hp:34+w*4,speed:70+w*2,color:'#5ba7ff',score:32,xp:20,damage:13,shootTimer:random(1.1,2.2)}
+    }[kind];
+    game.enemies.push({kind,x,y,vx:0,vy:0,maxHp:base.hp,hitFlash:0,...base});
+  }
+
+  function spawnHazard(){
+    game.hazards.push({x:random(80,W-80),y:random(80,H-80),r:random(28,54),life:random(8,13),pulse:0});
+  }
+
+  function addDrone(){
+    const i = game.drones.length;
+    game.drones.push({angle:i*Math.PI*2/Math.max(1,i+1),radius:44,lastShot:0,x:0,y:0});
+  }
+
+  function shootFrom(x,y,angle,owner='player',damage=null,speed=null,pierce=null,color=null){
+    const p = game.player;
+    const isPlayer = owner === 'player';
+    const crit = isPlayer && Math.random() < p.crit;
+    game.bullets.push({
+      x,y,
+      vx:Math.cos(angle)*(speed ?? (isPlayer ? p.bulletSpeed : 300)),
+      vy:Math.sin(angle)*(speed ?? (isPlayer ? p.bulletSpeed : 300)),
+      r:isPlayer?4.4:5.2,
+      life:isPlayer?1.25:3.2,
+      owner,
+      damage:(damage ?? (isPlayer ? p.damage : 12))*(crit?2:1),
+      pierce:pierce ?? (isPlayer ? p.pierce : 0),
+      color:color || (crit ? '#ffe06a' : (isPlayer ? '#58e7ff' : '#5ba7ff'))
+    });
+    if(crit) floatingText(x,y,tr('crit'),'#ffe06a');
+  }
+
+  function getAimAngle(){
+    const p = game.player;
+    if(!p) return 0;
+    return touch.aimId !== null && touch.aimAngle !== null ? touch.aimAngle : angleTo(p.x,p.y,mouse.x,mouse.y);
+  }
+
+  function playerShoot(now){
+    const p = game.player;
+    const rapid = game.rapidUntil > game.time ? .48 : 1;
+    if(now - p.lastShot < p.fireDelay * rapid) return;
+    p.lastShot = now;
+    const a = getAimAngle();
+    shootFrom(p.x+Math.cos(a)*p.r,p.y+Math.sin(a)*p.r,a);
+    const extra = Math.min(4,p.spread);
+    for(let i=1;i<=extra;i++){
+      const off = .12*i;
+      shootFrom(p.x,p.y,a+off,'player',p.damage*.78,p.bulletSpeed*.94,p.pierce);
+      shootFrom(p.x,p.y,a-off,'player',p.damage*.78,p.bulletSpeed*.94,p.pierce);
+    }
+  }
+
+  function registerUpgrade(u){
+    if(!game.upgrades[u.id]) game.upgrades[u.id] = {icon:u.icon,nameKey:u.nameKey,count:0};
+    game.upgrades[u.id].count++;
+    updateUpgradeList();
+  }
+
+  function updateUpgradeList(){
+    const items = Object.values(game.upgrades);
+    if(items.length === 0){
+      upgradesList.innerHTML = `<span class="empty">${tr('none')}</span>`;
+      return;
+    }
+    upgradesList.innerHTML = items.map(item => `<span class="chip"><span>${item.icon}</span><span>${tr(item.nameKey).replace(/\s*\+.*/,'')}</span><span class="count">x${item.count}</span></span>`).join('');
+  }
+
+  function makeUpgradeChoices(){
+    state = 'upgrade';
+    upgradeOverlay.style.display = 'grid';
+    upgradeGrid.innerHTML = '';
+    const optionTotal = Math.min(config.optionCount, upgradePool.length);
+    const targetPicks = Math.min(config.pickCount, optionTotal);
+    let selectedCount = 0;
+    const pool = upgradePool.slice();
+    const choices = [];
+    while(choices.length < optionTotal && pool.length){
+      const idx = Math.floor(Math.random()*pool.length);
+      choices.push(pool.splice(idx,1)[0]);
+    }
+    const updateHint = () => {
+      upgradeHint.textContent = tr('choose',{n:targetPicks,word:targetPicks>1?tr('powers'):tr('power'),selected:selectedCount});
+    };
+    updateHint();
+    choices.forEach(u => {
+      const el = document.createElement('div');
+      el.className = 'upgrade';
+      el.innerHTML = `<div class="icon">${u.icon}</div><b>${tr(u.nameKey)}</b><small>${tr(u.descKey)}</small>`;
+      el.addEventListener('click', () => {
+        if(el.classList.contains('selected') || selectedCount >= targetPicks) return;
+        el.classList.add('selected');
+        u.apply();
+        registerUpgrade(u);
+        selectedCount++;
+        updateHint();
+        updateHud();
+        toast(tr(u.nameKey));
+        if(selectedCount >= targetPicks){
+          setTimeout(() => {
+            if(state === 'upgrade'){
