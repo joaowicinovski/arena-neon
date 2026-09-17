@@ -1,0 +1,120 @@
+
+  async function initPlatform(){
+    menuOverlay.style.display='grid';
+    menuCard.innerHTML=`<h2>${tr('loading')}</h2><p>● ● ●</p>`;
+    resize(); draw();
+    await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
+    if(platform.inPlayables){
+      try{ytgame.game.firstFrameReady();}catch(_){ }
+      try{
+        const locale=await ytgame.system.getLanguage();
+        language=String(locale||'en').toLowerCase().startsWith('pt')?'pt':'en';
+      }catch(_){language='en';}
+      try{platform.audioEnabled=!!ytgame.system.isAudioEnabled();}catch(_){platform.audioEnabled=true;}
+      try{ytgame.system.onAudioEnabledChange(v=>{platform.audioEnabled=!!v;});}catch(_){ }
+      try{ytgame.system.onPause(onPlatformPause);ytgame.system.onResume(onPlatformResume);}catch(_){ }
+      try{applySavedProgress(await ytgame.game.loadData());}catch(_){ }
+    }else{
+      language='pt';
+      try{applySavedProgress(localStorage.getItem('arena_neon_save'));}catch(_){ }
+    }
+    platform.loaded=true;
+    applyStaticTranslations();
+    showMenu();
+    updateHud();
+    draw();
+    if(platform.inPlayables){
+      try{ytgame.game.gameReady();}catch(_){ }
+    }
+    startLoop();
+  }
+
+  function startLoop(){
+    if(platform.paused || rafId) return;
+    lastTime=performance.now();
+    rafId=requestAnimationFrame(loop);
+  }
+
+  function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+  function distance(x1,y1,x2,y2){return Math.hypot(x2-x1,y2-y1);}
+  function angleTo(x1,y1,x2,y2){return Math.atan2(y2-y1,x2-x1);}
+  function random(min,max){return min + Math.random()*(max-min);}
+
+  function resize(){
+    const r = shell.getBoundingClientRect();
+    W = Math.max(480, Math.floor(r.width));
+    H = Math.max(270, Math.floor(r.height));
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    if(game.player){
+      game.player.x = clamp(game.player.x, game.player.r, W-game.player.r);
+      game.player.y = clamp(game.player.y, game.player.r, H-game.player.r);
+    }
+    makeStars();
+  }
+
+  function makeStars(){
+    stars = [];
+    for(let i=0;i<90;i++) stars.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.6+.35,a:Math.random()*.65+.2,s:Math.random()*.25+.05});
+  }
+
+  function readSettings(){
+    const optionEl = document.getElementById('optionCount');
+    const pickEl = document.getElementById('pickCount');
+    const autoEl = document.getElementById('autoFire');
+    if(optionEl) config.optionCount = clamp(parseInt(optionEl.value,10) || 3, 1, upgradePool.length);
+    if(pickEl) config.pickCount = clamp(parseInt(pickEl.value,10) || 1, 1, config.optionCount);
+    if(autoEl) config.autoFire = !!autoEl.checked;
+    shootModeText.textContent = config.autoFire ? tr('automatic') : tr('manual');
+  }
+
+  function playerFactory(){
+    return {x:W/2,y:H/2,vx:0,vy:0,r:15,hp:100,maxHp:100,accel:860,maxSpeed:250,friction:.88,lastShot:0,fireDelay:225,damage:22,bulletSpeed:660,spread:0,pierce:0,crit:.06,pickupRange:78,regen:0,armor:0,invuln:1.2};
+  }
+
+  function resetGame(){
+    readSettings();
+    game.player = playerFactory();
+    game.bullets = [];
+    game.enemies = [];
+    game.pickups = [];
+    game.particles = [];
+    game.texts = [];
+    game.drones = [];
+    game.hazards = [];
+    game.score = 0;
+    game.wave = 1;
+    game.level = 1;
+    game.xp = 0;
+    game.xpNeed = 80;
+    game.time = 0;
+    game.rapidUntil = 0;
+    game.shieldUntil = 0;
+    game.magnetUntil = 0;
+    game.doubleUntil = 0;
+    game.upgrades = {};
+    spawnTimer = 0;
+    waveTimer = 0;
+    shake = 0;
+    state = 'playing';
+    menuOverlay.style.display = 'none';
+    upgradeOverlay.style.display = 'none';
+    for(let i=0;i<6;i++) spawnPickup('crystal', random(70,W-70), random(70,H-70));
+    updateUpgradeList();
+    updateHud();
+    toast(tr('started'));
+    queueSave();
+  }
+
+  function showMenu(){
+    state = 'menu';
+    menuScreen = 'main';
+    upgradeOverlay.style.display = 'none';
+    menuOverlay.style.display = 'grid';
+    menuCard.innerHTML = `
+      <h1>Arena Neon</h1>
+      <p>${tr('tagline')}</p>
+      <p><b>${tr('objective')}</b> ${tr('objectiveText')}</p>
+      <div class="settingsGrid">
+        <div class="field">
