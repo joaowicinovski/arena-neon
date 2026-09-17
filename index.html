@@ -19,7 +19,48 @@
         const paths=Array.from({length:10},(_,i)=>`parts/part${String(i).padStart(2,'0')}.txt`);
         const responses=await Promise.all(paths.map(p=>fetch(p,{cache:'no-store'})));
         if(responses.some(r=>!r.ok)) throw new Error('Falha ao carregar arquivos do jogo');
-        const html=(await Promise.all(responses.map(r=>r.text()))).join('');
+        let html=(await Promise.all(responses.map(r=>r.text()))).join('');
+
+        const mobileLandscapeCss=`
+          @media (orientation:landscape) and (pointer:coarse){
+            html,body{width:100vw!important;height:100dvh!important;min-height:100dvh!important;overflow:hidden!important}
+            #wrap{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;min-height:0!important;padding:0!important;margin:0!important;overflow:hidden!important}
+            #layout{display:block!important;width:100vw!important;height:100dvh!important;min-height:0!important;margin:0!important;padding:0!important}
+            #gameShell{position:absolute!important;inset:0!important;width:100vw!important;height:100dvh!important;min-width:0!important;min-height:0!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+            #sidePanel{display:none!important}
+            #touchControls{display:block!important}
+            #menuOverlay,#upgradeOverlay{padding:max(6px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left))!important}
+            .card{max-height:calc(100dvh - 12px)!important;overflow:auto!important;padding:12px!important}
+            #touchPauseBtn{top:max(8px,env(safe-area-inset-top))!important;right:max(8px,env(safe-area-inset-right))!important;left:auto!important;bottom:auto!important;transform:none!important;min-width:74px!important;min-height:40px!important;padding:7px 10px!important}
+            .touchStick{bottom:max(8px,env(safe-area-inset-bottom))!important}
+            .touchStick.move{left:max(10px,env(safe-area-inset-left))!important}
+            .touchStick.aim{right:max(10px,env(safe-area-inset-right))!important}
+            #toast{top:max(8px,env(safe-area-inset-top))!important}
+          }
+        `;
+        html=html.replace('</style>',mobileLandscapeCss+'</style>');
+
+        const mobileLandscapeJs=`<script>
+          (()=>{
+            const coarse=window.matchMedia('(pointer: coarse)');
+            const landscape=window.matchMedia('(orientation: landscape)');
+            const active=()=>coarse.matches&&landscape.matches;
+            const sync=()=>document.body.classList.toggle('mobile-landscape',active());
+            const tryFullscreen=()=>{
+              if(!active()||document.fullscreenElement||document.webkitFullscreenElement)return;
+              const el=document.documentElement;
+              const request=el.requestFullscreen||el.webkitRequestFullscreen;
+              if(request){try{const r=request.call(el);if(r&&r.catch)r.catch(()=>{});}catch(_){}}
+            };
+            sync();
+            window.addEventListener('resize',sync,{passive:true});
+            window.addEventListener('orientationchange',()=>setTimeout(sync,100),{passive:true});
+            document.addEventListener('pointerdown',tryFullscreen,{capture:true,passive:true});
+            document.addEventListener('touchend',tryFullscreen,{capture:true,passive:true});
+          })();
+        <\/script>`;
+        html=html.replace('</body>',mobileLandscapeJs+'</body>');
+
         document.open();
         document.write(html);
         document.close();
